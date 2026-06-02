@@ -7,6 +7,10 @@ on:
         description: 'Version to build (for example, 1.0.0). Leave empty to use SNAPSHOT from gradle.properties.'
         required: false
         default: ''
+      source_ref:
+        description: 'Branch, tag, or SHA to build. Leave empty to use the selected workflow commit.'
+        required: false
+        default: ''
       release:
         description: 'Build as a release version without the -SNAPSHOT suffix.'
         required: false
@@ -24,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ inputs.source_ref || github.sha }}
 
       - uses: actions/setup-java@v4
         with:
@@ -62,7 +66,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ inputs.source_ref || github.sha }}
 
       - uses: microsoft/setup-msbuild@v1
 
@@ -103,7 +107,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ inputs.source_ref || github.sha }}
 
       - uses: ./.github/actions/setup-prerequisites
 
@@ -140,7 +144,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ inputs.source_ref || github.sha }}
 
       - uses: ./.github/actions/setup-prerequisites
 
@@ -174,7 +178,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ inputs.source_ref || github.sha }}
 
       - uses: ./.github/actions/setup-prerequisites
 
