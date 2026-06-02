@@ -1,0 +1,203 @@
+name: Upload Maven Artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (for example, 1.0.0). Leave empty to use SNAPSHOT from gradle.properties.'
+        required: false
+        default: ''
+      release:
+        description: 'Build as a release version without the -SNAPSHOT suffix.'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: upload-maven-artifacts-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    name: 'macOS'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto'
+
+      - uses: ./.github/actions/setup-prerequisites
+
+      - name: 'Publish to local Maven repository'
+        shell: bash
+        run: |
+          EXTRA_ARGS=()
+          if [[ -n "${{ inputs.version }}" ]]; then
+            EXTRA_ARGS+=("-Pdeploy.version=${{ inputs.version }}")
+          fi
+          if [[ "${{ inputs.release }}" == "true" ]]; then
+            EXTRA_ARGS+=("-Pdeploy.release=true")
+          fi
+          ./gradlew --no-daemon --stacktrace \
+            -PawtEnabled=true \
+            -Pskiko.native.enabled=true \
+            "${EXTRA_ARGS[@]}" \
+            :skiko:publishToBuildRepo
+
+      - uses: actions/upload-artifact@v4
+        name: 'Upload Maven repository'
+        with:
+          name: skiko-maven-repository-macos
+          path: skiko/build/repo
+          if-no-files-found: error
+
+  windows:
+    name: 'Windows'
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: microsoft/setup-msbuild@v1
+
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto'
+
+      - uses: ./.github/actions/setup-prerequisites
+
+      - name: 'Publish Windows artifacts to local Maven repository'
+        shell: bash
+        run: |
+          EXTRA_ARGS=()
+          if [[ -n "${{ inputs.version }}" ]]; then
+            EXTRA_ARGS+=("-Pdeploy.version=${{ inputs.version }}")
+          fi
+          if [[ "${{ inputs.release }}" == "true" ]]; then
+            EXTRA_ARGS+=("-Pdeploy.release=true")
+          fi
+          ./gradlew --no-daemon --stacktrace \
+            -PawtEnabled=true \
+            "${EXTRA_ARGS[@]}" \
+            :skiko:publishSkikoJvmRuntimeWindowsX64PublicationToBuildRepoRepository
+
+      - uses: actions/upload-artifact@v4
+        name: 'Upload Maven repository'
+        with:
+          name: skiko-maven-repository-windows
+          path: skiko/build/repo
+          if-no-files-found: error
+
+  linux:
+    name: 'Linux'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: ./.github/actions/setup-prerequisites
+
+      - uses: ./.github/actions/docker-skiko-run
+        name: 'Publish Linux artifacts to local Maven repository'
+        with:
+          image_name: linux-compat
+          command: |
+            EXTRA_ARGS=()
+            if [[ -n "${{ inputs.version }}" ]]; then
+              EXTRA_ARGS+=("-Pdeploy.version=${{ inputs.version }}")
+            fi
+            if [[ "${{ inputs.release }}" == "true" ]]; then
+              EXTRA_ARGS+=("-Pdeploy.release=true")
+            fi
+            ./gradlew --no-daemon --stacktrace \
+              -PawtEnabled=true \
+              -Pskiko.native.linux.enabled=true \
+              "${EXTRA_ARGS[@]}" \
+              :skiko:publishSkikoJvmRuntimeLinuxX64PublicationToBuildRepoRepository \
+              :skiko:publishLinuxX64PublicationToBuildRepoRepository \
+              :skiko:publishLinuxArm64PublicationToBuildRepoRepository
+
+      - uses: actions/upload-artifact@v4
+        name: 'Upload Maven repository'
+        with:
+          name: skiko-maven-repository-linux
+          path: skiko/build/repo
+          if-no-files-found: error
+
+  android:
+    name: 'Android'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: ./.github/actions/setup-prerequisites
+
+      - uses: ./.github/actions/docker-skiko-run
+        name: 'Publish Android artifacts to local Maven repository'
+        with:
+          image_name: linux-compat
+          command: |
+            EXTRA_ARGS=()
+            if [[ -n "${{ inputs.version }}" ]]; then
+              EXTRA_ARGS+=("-Pdeploy.version=${{ inputs.version }}")
+            fi
+            if [[ "${{ inputs.release }}" == "true" ]]; then
+              EXTRA_ARGS+=("-Pdeploy.release=true")
+            fi
+            ./gradlew --no-daemon --stacktrace \
+              -Pskiko.android.enabled=true \
+              "${EXTRA_ARGS[@]}" \
+              :skiko:publishToBuildRepo
+
+      - uses: actions/upload-artifact@v4
+        name: 'Upload Maven repository'
+        with:
+          name: skiko-maven-repository-android
+          path: skiko/build/repo
+          if-no-files-found: error
+
+  web:
+    name: 'WebAssembly'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: ./.github/actions/setup-prerequisites
+
+      - uses: ./.github/actions/docker-skiko-run
+        name: 'Publish WebAssembly artifacts to local Maven repository'
+        with:
+          image_name: linux-emscripten-amd64
+          command: |
+            EXTRA_ARGS=()
+            if [[ -n "${{ inputs.version }}" ]]; then
+              EXTRA_ARGS+=("-Pdeploy.version=${{ inputs.version }}")
+            fi
+            if [[ "${{ inputs.release }}" == "true" ]]; then
+              EXTRA_ARGS+=("-Pdeploy.release=true")
+            fi
+            ./gradlew --no-daemon --stacktrace \
+              -Pskiko.wasm.enabled=true \
+              "${EXTRA_ARGS[@]}" \
+              :skiko:publishToBuildRepo
+
+      - uses: actions/upload-artifact@v4
+        name: 'Upload Maven repository'
+        with:
+          name: skiko-maven-repository-web
+          path: skiko/build/repo
+          if-no-files-found: error
